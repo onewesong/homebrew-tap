@@ -1,17 +1,29 @@
-# Onewesong Tap
+# Onewesong Homebrew Tap
 
-## How do I install these formulae?
+## CleanDisk
 
-`brew install onewesong/tap/<formula>`
+Install the latest Apple Silicon release of CleanDisk:
 
-Or `brew tap onewesong/tap` and then `brew install <formula>`.
+```bash
+brew install --cask onewesong/tap/cleandisk
+```
 
-Or, in a `brew bundle` `Brewfile`:
+The application is installed at `/Applications/CleanDisk.app`. CleanDisk currently uses ad-hoc signing and is not notarized, so macOS may require confirmation in **System Settings > Privacy & Security** the first time it is opened.
+
+To uninstall:
+
+```bash
+brew uninstall --cask cleandisk
+```
+
+In a `Brewfile`:
 
 ```ruby
 tap "onewesong/tap"
-brew "<formula>"
+cask "cleandisk"
 ```
+
+The cask tracks GitHub Releases from [onewesong/cleandisk](https://github.com/onewesong/cleandisk) and is checked for updates daily.
 
 ## Documentation
 

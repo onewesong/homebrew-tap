@@ -1,0 +1,76 @@
+name: Update CleanDisk cask
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-cleandisk
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: macos-26
+
+    steps:
+      - name: Set up Homebrew
+        id: set-up-homebrew
+        uses: Homebrew/actions/setup-homebrew@df4b09108a1de9d6f995fe68f302b3f68bd6d2ef # 2026.07.20.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read latest CleanDisk release
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          release_json=$(gh release view --repo onewesong/cleandisk --json tagName,assets)
+          version=$(jq -r '.tagName | sub("^v"; "")' <<<"$release_json")
+          asset_name="CleanDisk_${version}_aarch64.app.tar.gz"
+          digest=$(jq -r --arg name "$asset_name" '.assets[] | select(.name == $name) | .digest' <<<"$release_json")
+
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]
+          then
+            echo "Unexpected release version: $version" >&2
+            exit 1
+          fi
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          then
+            echo "Release asset or SHA-256 digest not found: $asset_name" >&2
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha256=${digest#sha256:}" >> "$GITHUB_OUTPUT"
+
+      - name: Update cask
+        env:
+          CASK_SHA256: ${{ steps.release.outputs.sha256 }}
+          CASK_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          ruby -pi -e 'sub(/^  version ".*"$/, "  version \"#{ENV.fetch("CASK_VERSION")}\""); sub(/^  sha256 ".*"$/, "  sha256 \"#{ENV.fetch("CASK_SHA256")}\"")' Casks/cleandisk.rb
+
+      - name: Validate cask
+        run: |
+          brew style --cask onewesong/tap/cleandisk
+          brew audit --cask onewesong/tap/cleandisk
+
+      - name: Commit update
+        env:
+          CASK_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          if git diff --quiet -- Casks/cleandisk.rb
+          then
+            echo "Cask is already current."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/cleandisk.rb
+          git commit -m "cleandisk: update to ${CASK_VERSION}"
+          git push origin HEAD:main
